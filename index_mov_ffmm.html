@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fondos Mutuos — Informe de Movimientos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface2: #f0ede6;
+  --border: #e0dbd0;
+  --text: #1a1916;
+  --muted: #6b6860;
+  --hint: #a8a49c;
+  --green: #1a6b4a;
+  --green-bg: #e8f5ee;
+  --red: #9b2a1a;
+  --red-bg: #fcecea;
+  --blue: #1a3d6b;
+  --blue-bg: #e6eef7;
+  --accent: #2d5a3d;
+  --mono: 'DM Mono', monospace;
+  --sans: 'Sora', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+/* Layout */
+.shell { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 2rem 0; position: sticky; top: 0; height: 100vh; flex-shrink: 0; display: flex; flex-direction: column; }
+.main { flex: 1; padding: 2.5rem 2rem; max-width: 1100px; }
+
+/* Sidebar */
+.logo { padding: 0 1.5rem 2rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+.logo-title { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: .02em; }
+.logo-sub { font-size: 11px; color: var(--hint); margin-top: 2px; font-family: var(--mono); }
+.nav-section { padding: 0 1rem; margin-bottom: .5rem; }
+.nav-label { font-size: 10px; font-weight: 600; color: var(--hint); letter-spacing: .08em; text-transform: uppercase; padding: 0 .5rem; margin-bottom: .5rem; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: var(--muted); cursor: pointer; transition: all .15s; border: none; background: none; width: 100%; text-align: left; }
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: var(--text); color: #fff; }
+.nav-icon { width: 16px; height: 16px; opacity: .7; }
+.sidebar-footer { margin-top: auto; padding: 1rem 1.5rem; border-top: 1px solid var(--border); font-size: 11px; color: var(--hint); font-family: var(--mono); }
+
+/* Header */
+.page-header { margin-bottom: 2rem; }
+.page-title { font-size: 24px; font-weight: 600; color: var(--text); }
+.page-meta { font-size: 12px; color: var(--hint); margin-top: 4px; font-family: var(--mono); }
+
+/* Tabs */
+.tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 2rem; }
+.tab { padding: 8px 18px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; background: none; border-top: none; border-left: none; border-right: none; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Metric cards */
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 2rem; }
+.metric { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+.metric-label { font-size: 11px; font-weight: 500; color: var(--hint); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+.metric-value { font-size: 26px; font-weight: 600; color: var(--text); font-family: var(--mono); }
+.metric-delta { font-size: 11px; margin-top: 5px; font-family: var(--mono); }
+.pos { color: var(--green); } .neg { color: var(--red); }
+
+/* Chart cards */
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 2rem; }
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+.chart-card.full { grid-column: 1 / -1; }
+.chart-card.tall { grid-column: 1 / -1; }
+.chart-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.chart-sub { font-size: 11px; color: var(--hint); margin-bottom: 12px; font-family: var(--mono); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; font-size: 11px; color: var(--muted); }
+.legend span { display: flex; align-items: center; gap: 5px; }
+.ld { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+/* Tables */
+.tbl-section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 2rem; }
+.tbl-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.tbl-title { font-size: 13px; font-weight: 600; }
+.tbl-sub { font-size: 11px; color: var(--hint); font-family: var(--mono); }
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th { font-size: 10px; font-weight: 600; color: var(--hint); text-transform: uppercase; letter-spacing: .05em; padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--border); background: var(--surface2); white-space: nowrap; }
+thead th:first-child { text-align: left; }
+tbody td { padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; font-family: var(--mono); font-size: 12px; }
+tbody td:first-child { text-align: left; font-family: var(--sans); color: var(--muted); font-size: 12px; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr.total td { font-weight: 600; color: var(--text); background: var(--surface2); }
+tbody tr.total td:first-child { color: var(--text); }
+tbody tr:hover td { background: #faf9f6; }
+.tbl-note { padding: .75rem 1.25rem; font-size: 10px; color: var(--hint); border-top: 1px solid var(--border); font-family: var(--mono); }
+
+/* Upload zone */
+.upload-zone { border: 1.5px dashed var(--border); border-radius: 12px; padding: 2.5rem; text-align: center; cursor: pointer; margin-bottom: 2rem; transition: all .2s; }
+.upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: var(--green-bg); }
+.upload-title { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+.upload-hint { font-size: 12px; color: var(--hint); font-family: var(--mono); }
+
+/* Filters */
+.filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5rem; }
+.fgroup { display: flex; flex-direction: column; gap: 4px; }
+.fgroup label { font-size: 10px; font-weight: 600; color: var(--hint); text-transform: uppercase; letter-spacing: .06em; }
+select, input[type=date] { font-family: var(--sans); font-size: 12px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); outline: none; }
+select:focus, input[type=date]:focus { border-color: var(--accent); }
+.btn { font-family: var(--sans); font-size: 12px; font-weight: 500; padding: 7px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--text); color: #fff; cursor: pointer; transition: opacity .15s; }
+.btn:hover { opacity: .85; }
+
+/* Badges */
+.badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.badge { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 500; font-family: var(--mono); }
+.badge-mm { background: var(--blue-bg); color: var(--blue); }
+.badge-rf { background: var(--green-bg); color: var(--green); }
+.badge-tot { background: var(--surface2); color: var(--muted); }
+
+/* File info */
+.file-info { font-size: 11px; color: var(--hint); font-family: var(--mono); margin-bottom: 1rem; }
+
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .charts-grid { grid-template-columns: 1fr; }
+  .chart-card.full, .chart-card.tall { grid-column: 1; }
+}
+@media (max-width: 500px) {
+  .metrics { grid-template-columns: 1fr 1fr; }
+  .main { padding: 1.25rem 1rem; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-title">FFMM Analytics</div>
+      <div class="logo-sub">v1.0 · 2026</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Informes</div>
+      <button class="nav-item active" onclick="setPage('movimientos', this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h10"/></svg>
+        Movimientos
+      </button>
+    </div>
+    <div class="nav-section" style="margin-top:.5rem;">
+      <div class="nav-label">Próximamente</div>
+      <button class="nav-item" style="opacity:.4;cursor:not-allowed;">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v12M2 8h12"/></svg>
+        Rentabilidades
+      </button>
+      <button class="nav-item" style="opacity:.4;cursor:not-allowed;">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l3 2"/></svg>
+        Mercado
+      </button>
+      <button class="nav-item" style="opacity:.4;cursor:not-allowed;">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+        Carteras
+      </button>
+    </div>
+    <div class="sidebar-footer">Datos al 24/04/2026<br>FX = 900</div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="page-header">
+      <div class="page-title">Flujo Mensual Fondos Mutuos</div>
+      <div class="page-meta">Al 24/04/2026 · 151 fondos · Cifras en MM USD</div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <button class="tab active" onclick="showTab('informe', this)">Informe</button>
+      <button class="tab" onclick="showTab('dashboard', this)">Dashboard</button>
+      <button class="tab" onclick="showTab('explorer', this)">Explorador</button>
+    </div>
+
+    <!-- ═══ TAB: INFORME ═══ -->
+    <div id="tab-informe">
+      <div class="badges">
+        <span class="badge badge-mm">MM última semana: +266.7 MM USD</span>
+        <span class="badge badge-rf">RF última semana: +94.2 MM USD</span>
+        <span class="badge badge-tot">Total última semana: +361.0 MM USD</span>
+      </div>
+
+      <div class="tbl-section">
+        <div class="tbl-header">
+          <div>
+            <div class="tbl-title">Flujo Neto — Aportes y Rescates (MM USD) 2026</div>
+            <div class="tbl-sub">Flujo neto mensual por clasificación</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table id="tbl-flujo-informe"></table>
+        </div>
+        <div class="tbl-note">*Considera el neto entre aportes y rescates realizados ese mes. FX = 900</div>
+      </div>
+
+      <div class="tbl-section">
+        <div class="tbl-header">
+          <div>
+            <div class="tbl-title">Evolución Patrimonio (MM USD) — Último día de cada mes</div>
+            <div class="tbl-sub">Patrimonio neto por clasificación desde may-25</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table id="tbl-pat-informe"></table>
+        </div>
+        <div class="tbl-note">*FX = 900</div>
+      </div>
+
+      <div class="tbl-section">
+        <div class="tbl-header">
+          <div>
+            <div class="tbl-title">Flujo Acumulado Neto por Año</div>
+            <div class="tbl-sub">Suma anual 2023–2026</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table id="tbl-acum-informe"></table>
+        </div>
+        <div class="tbl-note">*FX = 900</div>
+      </div>
+
+      <div class="tbl-section">
+        <div class="tbl-header">
+          <div>
+            <div class="tbl-title">Patrimonio Neto — Snapshots históricos</div>
+            <div class="tbl-sub">dic-22 · dic-23 · dic-24 · 24/04/2026</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table id="tbl-snap-informe"></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB: DASHBOARD ═══ -->
+    <div id="tab-dashboard" style="display:none;">
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Patrimonio total</div>
+          <div class="metric-value">$61.8B</div>
+          <div class="metric-delta pos">▲ +12.1% vs dic-24</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Money Market</div>
+          <div class="metric-value">$45.6B</div>
+          <div class="metric-delta" style="color:var(--hint)">74% del total</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Renta Fija</div>
+          <div class="metric-value">$16.2B</div>
+          <div class="metric-delta" style="color:var(--hint)">26% del total</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Flujo YTD 2026</div>
+          <div class="metric-value pos">$4.1B</div>
+          <div class="metric-delta pos">▲ MM +3.0B · RF +1.1B</div>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card full">
+          <div class="chart-title">Flujo neto mensual (MM USD)</div>
+          <div class="chart-sub">may-25 → abr-26 · Money Market vs Renta Fija</div>
+          <div class="legend">
+            <span><span class="ld" style="background:#1a3d6b"></span>Money Market</span>
+            <span><span class="ld" style="background:#1a6b4a"></span>Renta Fija</span>
+          </div>
+          <div style="position:relative;height:220px;">
+            <canvas id="c-flujo-dash" role="img" aria-label="Flujo neto mensual MM y RF">Flujo neto mensual.</canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Evolución patrimonio (MM USD)</div>
+          <div class="chart-sub">may-25 → abr-26 · apilado por tipo</div>
+          <div class="legend">
+            <span><span class="ld" style="background:#1a3d6b"></span>Money Market</span>
+            <span><span class="ld" style="background:#1a6b4a"></span>Renta Fija</span>
+          </div>
+          <div style="position:relative;height:220px;">
+            <canvas id="c-pat-dash" role="img" aria-label="Evolución patrimonio apilada">Evolución patrimonio.</canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Flujo acumulado anual</div>
+          <div class="chart-sub">Total por año 2023–2026</div>
+          <div class="legend">
+            <span><span class="ld" style="background:#1a3d6b"></span>Money Market</span>
+            <span><span class="ld" style="background:#1a6b4a"></span>Renta Fija</span>
+          </div>
+          <div style="position:relative;height:220px;">
+            <canvas id="c-acum-dash" role="img" aria-label="Flujo acumulado anual">Flujo acumulado anual.</canvas>
+          </div>
+        </div>
+        <div class="chart-card tall">
+          <div class="chart-title">Patrimonio por administradora (MM USD)</div>
+          <div class="chart-sub">Top 10 · al 24/04/2026</div>
+          <div style="position:relative;height:280px;">
+            <canvas id="c-admin-dash" role="img" aria-label="Patrimonio por administradora">Patrimonio por administradora.</canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB: EXPLORADOR ═══ -->
+    <div id="tab-explorer" style="display:none;">
+      <div class="upload-zone" id="dropzone" onclick="document.getElementById('fileinput').click()">
+        <input type="file" id="fileinput" accept=".xlsx,.xls" style="display:none">
+        <div class="upload-title">Actualizar datos — arrastra tu Excel aquí</div>
+        <div class="upload-hint">Columnas: Fecha · Administradora · Categoría · Fondo · Patrimonio Neto · Aportes · Rescates · Flujo Neto</div>
+      </div>
+      <div class="file-info" id="fileinfo"></div>
+
+      <div class="filters">
+        <div class="fgroup"><label>Desde</label><input type="date" id="f-desde" value="2026-01-01"></div>
+        <div class="fgroup"><label>Hasta</label><input type="date" id="f-hasta" value="2026-04-24"></div>
+        <div class="fgroup"><label>Administradora</label>
+          <select id="f-admin"><option value="">Todas</option></select>
+        </div>
+        <div class="fgroup"><label>Categoría</label>
+          <select id="f-cat"><option value="">Todas</option></select>
+        </div>
+        <div class="fgroup"><label>&nbsp;</label><button class="btn" onclick="applyFilters()">Aplicar</button></div>
+      </div>
+
+      <div class="metrics" id="exp-metrics" style="grid-template-columns:repeat(4,1fr);">
+        <div class="metric"><div class="metric-label">Patrimonio neto</div><div class="metric-value" id="em-pat">—</div></div>
+        <div class="metric"><div class="metric-label">Aportes</div><div class="metric-value pos" id="em-ap">—</div></div>
+        <div class="metric"><div class="metric-label">Rescates</div><div class="metric-value neg" id="em-res">—</div></div>
+        <div class="metric"><div class="metric-label">Flujo neto</div><div class="metric-value" id="em-flu">—</div><div class="metric-delta" id="em-flu-d"></div></div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card full">
+          <div class="chart-title">Flujo neto diario</div>
+          <div class="chart-sub">Carga un Excel para ver datos reales</div>
+          <div style="position:relative;height:180px;"><canvas id="c-exp-flujo" role="img" aria-label="Flujo neto diario">Flujo neto diario.</canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Patrimonio por administradora</div>
+          <div class="chart-sub">Distribución del AUM</div>
+          <div style="position:relative;height:220px;"><canvas id="c-exp-admin" role="img" aria-label="Patrimonio por administradora">Patrimonio por administradora.</canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Aportes vs rescates por categoría</div>
+          <div class="chart-sub">Comparativa agrupada</div>
+          <div style="position:relative;height:220px;"><canvas id="c-exp-cat" role="img" aria-label="Aportes vs rescates por categoría">Aportes y rescates por categoría.</canvas></div>
+        </div>
+      </div>
+
+      <div class="tbl-section">
+        <div class="tbl-header">
+          <div class="tbl-title">Detalle por fondo</div>
+          <div class="tbl-sub">Top 20 por patrimonio neto</div>
+        </div>
+        <div class="tbl-wrap"><table id="tbl-exp-fondos">
+          <thead><tr><th>Fondo</th><th>Administradora</th><th>Categoría</th><th>Patrimonio</th><th>Aportes</th><th>Rescates</th><th>Flujo neto</th></tr></thead>
+          <tbody><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--hint);font-family:var(--sans);">Carga un Excel para explorar datos</td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ─── DATA ─── */
+const HDR_M = ['may-25','jun-25','jul-25','ago-25','sep-25','oct-25','nov-25','dic-25','ene-26','feb-26','mar-26','abr-26','04/04-10/04','11/04-17/04','18/04-24/04'];
+const MM_FLU = [2131.03,-6243.51,-885.80,-7749.70,-1180.90,-1544.09,-7178.34,4730.12,-109.28,323.70,-5382.48,8197.98,599.77,-537.74,266.72];
+const RF_FLU = [361.91,386.61,324.23,529.95,419.44,98.17,109.62,263.24,72.82,343.60,48.66,625.47,222.99,178.26,94.23];
+const TOT_FLU = [2492.94,-5856.90,-561.56,-7219.75,-761.46,-1445.92,-7068.72,4993.36,-36.46,667.30,-5333.82,8823.45,822.76,-359.49,360.96];
+const MM_PAT = [46339.39,40324.76,39585.89,39685.79,38614.98,44374.66,37300.94,42141.27,42151.87,42619.95,37300.50,45625.31,45825.40,45309.24,45625.31];
+const RF_PAT = [12082.85,12419.13,12826.39,13539.89,14045.81,14228.32,14404.86,14709.35,14829.34,15266.22,15452.20,16200.74,15875.18,16073.60,16200.74];
+const TOT_PAT = [58422.24,52743.89,52412.28,53225.68,52660.79,58602.98,51705.80,56850.62,56981.21,57886.17,52752.70,61826.05,61700.58,61382.84,61826.05];
+const YRS = ['2023','2024','2025','2026'];
+const MM_ACUM = [7809.48,10369.55,-18416.14,3029.92];
+const RF_ACUM = [-291.64,2573.25,3706.91,1090.55];
+const TOT_ACUM = [7517.84,12942.79,-14709.23,4120.47];
+const SNAP_LBL = ['dic-22','dic-23','dic-24','24/04/26'];
+const SNAP_MM = [22093.59,29265.69,44652.26,45625.31];
+const SNAP_RF = [7140.42,7329.61,10478.31,16200.74];
+const ADMIN_PAT = {
+  'Banchile AGF':15005.51,'Santander AGF':9951.50,'Bci AGF':6881.07,
+  'BancoEstado AGF':6523.85,'Bice AGF':4186.10,'Scotia AGF':3099.46,
+  'Itau AGF':2570.55,'Security AGF':2376.20,'Larrain Vial AGF':2216.19,'Sura AGF':2092.70
+};
+const ADMINS_ALL = ["Ameris Capital AGF","Banchile AGF","BancoEstado AGF","Bci AGF","Bice AGF","Btg Pactual AGF","Compass AGF","Credicorp AGF","EuroAmerica AGF","Falcom AGF","Fynsa AGF","Internacional AGF","Itau AGF","Larrain Vial AGF","Mbi AGF","Moneda AGF","Principal AGF","Prudential AGF","Quest AGF","Santander AGF","Scotia AGF","Security AGF","Singular AGF","Sura AGF","Zurich AGF"];
+const CATS_ALL = ["Deuda Chilena Corporativa","Deuda Chilena Otros","RF Nacional < 365 Pesos","RF Nacional < 365 UF","RF Nacional < 90","RF Nacional > 365,  UF > 5A","RF Nacional > 365, Pesos","RF Nacional > 365, UF < 3A","RF Nacional > 365, UF > 3A y <= 5A","Sin Clasificación"];
+
+/* ─── FORMAT ─── */
+function fmtB(v){ if(v==null||isNaN(v)) return '—'; const a=Math.abs(v); const s=a>=1000?(v/1000).toFixed(1)+'B':v.toFixed(1); return v<0?'-'+Math.abs(v/1000).toFixed(1)+'B':s; }
+function fmtFull(v){ if(v==null||isNaN(v)) return '—'; return '$'+Math.round(v).toLocaleString('es-CL'); }
+function fmtM(v){ return v==null||isNaN(v)?'—':(v>=0?'+':'')+v.toFixed(1); }
+function cc(v){ return v<-0.001?'neg':v>0.001?'pos':''; }
+
+/* ─── TABLES ─── */
+function buildTable(el, headers, rows){
+  let h='<thead><tr><th>Clasificación</th>';
+  headers.forEach(hd=>{ h+=`<th>${hd}</th>`; });
+  h+='</tr></thead><tbody>';
+  rows.forEach(r=>{
+    h+=`<tr class="${r.isTotal?'total':''}"><td>${r.label}</td>`;
+    r.vals.forEach(v=>{ h+=`<td class="${cc(v)}">${fmtM(v)}</td>`; });
+    h+='</tr>';
+  });
+  h+='</tbody>';
+  el.innerHTML=h;
+}
+
+buildTable(document.getElementById('tbl-flujo-informe'), HDR_M, [
+  {label:'Money Market (FFMM < 360 días)', vals:MM_FLU},
+  {label:'Renta Fija (FFMM > 360 días)', vals:RF_FLU},
+  {label:'Total', vals:TOT_FLU, isTotal:true},
+]);
+buildTable(document.getElementById('tbl-pat-informe'), HDR_M, [
+  {label:'Money Market (FFMM < 360 días)', vals:MM_PAT},
+  {label:'Renta Fija (FFMM > 360 días)', vals:RF_PAT},
+  {label:'Total', vals:TOT_PAT, isTotal:true},
+]);
+buildTable(document.getElementById('tbl-acum-informe'), YRS, [
+  {label:'Money Market (FFMM < 360 días)', vals:MM_ACUM},
+  {label:'Renta Fija (FFMM > 360 días)', vals:RF_ACUM},
+  {label:'Total', vals:TOT_ACUM, isTotal:true},
+]);
+buildTable(document.getElementById('tbl-snap-informe'), SNAP_LBL, [
+  {label:'Money Market', vals:SNAP_MM},
+  {label:'Renta Fija', vals:SNAP_RF},
+  {label:'Total', vals:SNAP_MM.map((v,i)=>v+SNAP_RF[i]), isTotal:true},
+]);
+
+/* ─── TABS ─── */
+function showTab(id, el){
+  ['informe','dashboard','explorer'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display = t===id?'':'none';
+  });
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  if(id==='dashboard') renderDashCharts();
+}
+function setPage(id, el){
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+/* ─── DASHBOARD CHARTS ─── */
+let dashDone=false;
+function renderDashCharts(){
+  if(dashDone) return; dashDone=true;
+  const TC='#a8a49c', GC='rgba(0,0,0,0.06)';
+  const meses=HDR_M.slice(0,12);
+
+  new Chart(document.getElementById('c-flujo-dash'),{type:'bar',
+    data:{labels:meses,datasets:[
+      {label:'Money Market',data:MM_FLU.slice(0,12),backgroundColor:'#1a3d6b'},
+      {label:'Renta Fija',data:RF_FLU.slice(0,12),backgroundColor:'#1a6b4a'},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TC,font:{size:9},maxRotation:45},grid:{display:false}},
+              y:{ticks:{color:TC,font:{size:10},callback:v=>v+''},grid:{color:GC}}}}
+  });
+
+  new Chart(document.getElementById('c-pat-dash'),{type:'bar',
+    data:{labels:meses,datasets:[
+      {label:'Money Market',data:MM_PAT.slice(0,12),backgroundColor:'#1a3d6b'},
+      {label:'Renta Fija',data:RF_PAT.slice(0,12),backgroundColor:'#1a6b4a'},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{stacked:true,ticks:{color:TC,font:{size:9},maxRotation:45},grid:{display:false}},
+              y:{stacked:true,ticks:{color:TC,font:{size:10},callback:v=>(v/1000).toFixed(0)+'B'},grid:{color:GC}}}}
+  });
+
+  new Chart(document.getElementById('c-acum-dash'),{type:'bar',
+    data:{labels:YRS,datasets:[
+      {label:'Money Market',data:MM_ACUM,backgroundColor:MM_ACUM.map(v=>v>=0?'#1a3d6b':'#6b1a1a')},
+      {label:'Renta Fija',data:RF_ACUM,backgroundColor:RF_ACUM.map(v=>v>=0?'#1a6b4a':'#6b3a1a')},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TC,font:{size:11}},grid:{display:false}},
+              y:{ticks:{color:TC,font:{size:10},callback:v=>v+''},grid:{color:GC}}}}
+  });
+
+  const adminLabels=Object.keys(ADMIN_PAT);
+  const adminVals=Object.values(ADMIN_PAT);
+  new Chart(document.getElementById('c-admin-dash'),{type:'bar',
+    data:{labels:adminLabels,datasets:[{label:'Patrimonio',data:adminVals,backgroundColor:'#2d5a3d'}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TC,font:{size:10},callback:v=>v+'B'},grid:{color:GC}},
+              y:{ticks:{color:TC,font:{size:11}},grid:{display:false}}}}
+  });
+}
+
+/* ─── EXPLORER ─── */
+let expData=[];
+let expCharts={};
+
+ADMINS_ALL.forEach(a=>{ const o=document.createElement('option'); o.value=a; o.textContent=a; document.getElementById('f-admin').appendChild(o); });
+CATS_ALL.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; document.getElementById('f-cat').appendChild(o); });
+
+function parseExcel(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+    let ws=null;
+    for(const n of wb.SheetNames){
+      if(n.toLowerCase().includes('diario')||n.toLowerCase().includes('dato')){ ws=wb.Sheets[n]; break; }
+    }
+    if(!ws) ws=wb.Sheets[wb.SheetNames[wb.SheetNames.length>1?1:0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{raw:false,dateNF:'yyyy-mm-dd'});
+    if(!rows.length){ alert('Sin datos.'); return; }
+    const s=rows[0], cm={};
+    for(const k of Object.keys(s)){
+      const kl=k.toLowerCase().replace(/[^a-záéíóúñ]/g,'');
+      if(kl.includes('fecha')) cm.fecha=k;
+      else if(kl.includes('admin')) cm.admin=k;
+      else if(kl.includes('categ')||kl.includes('cat')) cm.cat=k;
+      else if(kl.includes('fondo')) cm.fondo=k;
+      else if(kl.includes('patrimon')) cm.pat=k;
+      else if(kl.includes('aporte')) cm.ap=k;
+      else if(kl.includes('rescate')) cm.res=k;
+      else if(kl.includes('flujo')) cm.flu=k;
+    }
+    expData=rows.map(r=>({
+      fecha:r[cm.fecha]||'', admin:r[cm.admin]||'', cat:r[cm.cat]||'', fondo:r[cm.fondo]||'',
+      pat:parseFloat(String(r[cm.pat]||'').replace(/[^0-9.-]/g,''))||0,
+      ap:parseFloat(String(r[cm.ap]||'').replace(/[^0-9.-]/g,''))||0,
+      res:parseFloat(String(r[cm.res]||'').replace(/[^0-9.-]/g,''))||0,
+      flu:parseFloat(String(r[cm.flu]||'').replace(/[^0-9.-]/g,''))||0,
+    })).filter(r=>r.fecha);
+    const fechas=expData.map(r=>r.fecha).sort();
+    document.getElementById('f-desde').value=fechas[0];
+    document.getElementById('f-hasta').value=fechas[fechas.length-1];
+    document.getElementById('fileinfo').textContent=file.name+' · '+expData.length.toLocaleString()+' registros cargados';
+    applyFilters();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function applyFilters(){
+  if(!expData.length) return;
+  const desde=document.getElementById('f-desde').value;
+  const hasta=document.getElementById('f-hasta').value;
+  const admin=document.getElementById('f-admin').value;
+  const cat=document.getElementById('f-cat').value;
+  const d=expData.filter(r=>{
+    if(desde&&r.fecha<desde) return false;
+    if(hasta&&r.fecha>hasta) return false;
+    if(admin&&r.admin!==admin) return false;
+    if(cat&&r.cat!==cat) return false;
+    return true;
+  });
+  const totPat=d.reduce((s,r)=>s+r.pat,0);
+  const totAp=d.reduce((s,r)=>s+r.ap,0);
+  const totRes=d.reduce((s,r)=>s+r.res,0);
+  const totFlu=d.reduce((s,r)=>s+r.flu,0);
+  document.getElementById('em-pat').textContent='$'+(totPat/1e9).toFixed(1)+'B';
+  document.getElementById('em-ap').textContent='$'+(totAp/1e9).toFixed(2)+'B';
+  document.getElementById('em-res').textContent='$'+(totRes/1e9).toFixed(2)+'B';
+  document.getElementById('em-flu').textContent=(totFlu>=0?'+':'')+''+(totFlu/1e9).toFixed(2)+'B';
+  const fd=document.getElementById('em-flu-d');
+  fd.textContent=totFlu>=0?'Aportes superan rescates':'Rescates superan aportes';
+  fd.className='metric-delta '+(totFlu>=0?'pos':'neg');
+  renderExpCharts(d);
+  renderExpTable(d);
+}
+
+function renderExpCharts(d){
+  const TC='#a8a49c', GC='rgba(0,0,0,0.06)';
+  const byDate={};
+  d.forEach(r=>{ byDate[r.fecha]=(byDate[r.fecha]||0)+r.flu; });
+  const fl=Object.keys(byDate).sort();
+  const fv=fl.map(f=>Math.round(byDate[f]/1e6));
+  if(expCharts.flujo) expCharts.flujo.destroy();
+  expCharts.flujo=new Chart(document.getElementById('c-exp-flujo'),{type:'bar',
+    data:{labels:fl,datasets:[{label:'Flujo neto',data:fv,backgroundColor:fv.map(v=>v>=0?'#1a6b4a':'#9b2a1a')}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TC,font:{size:9},maxTicksLimit:12,maxRotation:45},grid:{display:false}},
+              y:{ticks:{color:TC,font:{size:10},callback:v=>v+'M'},grid:{color:GC}}}}
+  });
+  const byAdmin={};
+  d.forEach(r=>{ byAdmin[r.admin]=(byAdmin[r.admin]||0)+r.pat; });
+  const aS=Object.entries(byAdmin).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  if(expCharts.admin) expCharts.admin.destroy();
+  expCharts.admin=new Chart(document.getElementById('c-exp-admin'),{type:'bar',
+    data:{labels:aS.map(x=>x[0]),datasets:[{label:'Patrimonio',data:aS.map(x=>Math.round(x[1]/1e9*10)/10),backgroundColor:'#2d5a3d'}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TC,font:{size:10},callback:v=>v+'B'},grid:{color:GC}},
+              y:{ticks:{color:TC,font:{size:10}},grid:{display:false}}}}
+  });
+  const byCat={};
+  d.forEach(r=>{ if(!byCat[r.cat]) byCat[r.cat]={ap:0,res:0}; byCat[r.cat].ap+=r.ap; byCat[r.cat].res+=r.res; });
+  const cS=Object.entries(byCat).sort((a,b)=>(b[1].ap+b[1].res)-(a[1].ap+a[1].res)).slice(0,8);
+  if(expCharts.cat) expCharts.cat.destroy();
+  expCharts.cat=new Chart(document.getElementById('c-exp-cat'),{type:'bar',
+    data:{labels:cS.map(x=>x[0]),datasets:[
+      {label:'Aportes',data:cS.map(x=>Math.round(x[1].ap/1e6*10)/10),backgroundColor:'#1a6b4a'},
+      {label:'Rescates',data:cS.map(x=>Math.round(x[1].res/1e6*10)/10),backgroundColor:'#9b2a1a'},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TC,font:{size:9},maxRotation:40},grid:{display:false}},
+              y:{ticks:{color:TC,font:{size:10},callback:v=>v+'M'},grid:{color:GC}}}}
+  });
+}
+
+function renderExpTable(d){
+  const byF={};
+  d.forEach(r=>{ if(!byF[r.fondo]) byF[r.fondo]={admin:r.admin,cat:r.cat,pat:0,ap:0,res:0,flu:0}; byF[r.fondo].pat+=r.pat; byF[r.fondo].ap+=r.ap; byF[r.fondo].res+=r.res; byF[r.fondo].flu+=r.flu; });
+  const sF=Object.entries(byF).sort((a,b)=>b[1].pat-a[1].pat).slice(0,20);
+  const tbody=document.querySelector('#tbl-exp-fondos tbody');
+  tbody.innerHTML=sF.map(([fondo,v])=>`
+    <tr>
+      <td style="font-family:var(--sans);font-weight:500">${fondo}</td>
+      <td style="font-family:var(--sans)">${v.admin}</td>
+      <td style="font-family:var(--sans)">${v.cat}</td>
+      <td>${(v.pat/1e9).toFixed(2)}B</td>
+      <td class="pos">${(v.ap/1e6).toFixed(1)}M</td>
+      <td class="neg">${(v.res/1e6).toFixed(1)}M</td>
+      <td class="${v.flu>=0?'pos':'neg'}">${(v.flu/1e6).toFixed(1)}M</td>
+    </tr>`).join('');
+}
+
+document.getElementById('fileinput').addEventListener('change',e=>{ if(e.target.files[0]) parseExcel(e.target.files[0]); });
+const dz=document.getElementById('dropzone');
+dz.addEventListener('dragover',e=>{ e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+dz.addEventListener('drop',e=>{ e.preventDefault(); dz.classList.remove('drag'); if(e.dataTransfer.files[0]) parseExcel(e.dataTransfer.files[0]); });
+</script>
+</body>
+</html>
